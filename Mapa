@@ -1,0 +1,115 @@
+use Portfolio
+
+CREATE TABLE Czas
+(
+Miasto Varchar(30) not null,
+Białystok time(0) null,
+Bydgoszcz time(0) null,
+Gdańsk time(0) null,
+Katowice time(0) null,
+Kielce time(0) null,
+Kraków time(0) null,
+Lublin time(0) null,
+Łódź time(0) null,
+Olsztyn time(0) null,
+Poznań time(0) null,
+Radom time(0) null,
+Rzeszów time(0) null,
+Suwałki time(0) null,
+Szczecin time(0) null,
+Warszawa time(0) null,
+Wrocław time(0) null,
+Zielona_Góra time(0) null);
+
+BULK INSERT Czas from 'C:\Users\HP\Desktop\Projekt_tabel\MapaCzas2.csv' With
+(
+Datafiletype = 'Widechar',
+Format = 'CSV',
+Firstrow = 2,
+Fieldterminator = ',',
+Rowterminator = '\n');
+
+CREATE TABLE Odległość
+(
+Miasto Varchar(30) not null,
+Białystok smallint null,
+Bydgoszcz smallint null,
+Gdańsk smallint null,
+Katowice smallint null,
+Kielce smallint null,
+Kraków smallint null,
+Lublin smallint null,
+Łódź smallint null,
+Olsztyn smallint null,
+Poznań smallint null,
+Radom smallint null,
+Rzeszów smallint null,
+Suwałki smallint null,
+Szczecin smallint null,
+Warszawa smallint null,
+Wrocław smallint null,
+Zielona_Góra smallint null);
+
+BULK INSERT Odległość from 'C:\Users\HP\Desktop\Projekt_tabel\MapaOdległość2.csv' With
+(
+Datafiletype = 'Widechar',
+Format = 'CSV',
+Firstrow = 2,
+Fieldterminator = ',',
+Rowterminator = '\n');
+
+CREATE VIEW CzasView as
+Select distinct * from Czas
+Unpivot(Czas for Miejscowość in(Białystok, Bydgoszcz, Gdańsk,Katowice,Kielce,Kraków ,Lublin,Łódź,Olsztyn,Poznań,Radom,Rzeszów,
+Suwałki,Szczecin,Warszawa,Wrocław,Zielona_Góra)) as A
+
+CREATE VIEW OdległośćView as
+Select distinct * from Odległość
+Unpivot(Dystans for Miejscowość in(Białystok,Bydgoszcz,Gdańsk,Katowice,Kielce,Kraków ,Lublin,Łódź,Olsztyn,Poznań,Radom,Rzeszów,
+Suwałki,Szczecin,Warszawa,Wrocław,Zielona_Góra)) as B
+
+CREATE Procedure Mapa 
+@Top int,
+@Od Varchar(30),
+@Do Varchar(30)  as
+
+With A as
+	(Select O.Miasto as Od, O.Dystans, Left(cast(C.Czas as char(2)),2) as Czas_H,
+	substring(cast(C.Czas as varchar(5)),4,2) as Czas_M, C.Miejscowość as Do 
+	from OdległośćView as O join CzasView as C
+	on O.Miejscowość = C.Miejscowość and
+	O.Miasto = C.Miasto),
+
+B as
+	(Select Od, Dystans, cast(Czas_H as int) * 60 + cast(Czas_M as int) as Czas_w_min, Do
+	from A),
+
+Ścieżki as
+	(Select Od, Do, cast('-' + Od + '-' + Do + '-' as varchar(max)) as Droga, Dystans,
+	Czas_w_min from B
+  
+Union all
+
+	Select Ś.Od, C.Do, cast(Ś.Droga + C.Do + '-' as Varchar(max)), Ś.Dystans + C.Dystans, Ś.Czas_w_min + C.Czas_w_min from Ścieżki as Ś
+	join B as C
+	on Case when Ś.Droga like '%-' + C.Do + '-%' then 1 else 0 End = 0 and Ś.Do = C.Od),
+
+X as
+	(Select Od, Do, Droga, Dystans, Right('0' + cast(Czas_w_min/60 as varchar(2)),2) as H, Right('0' + cast(Czas_w_min - (Czas_w_min/60 * 60) as varchar(2)),2) as M from Ścieżki),
+
+Y as
+	(Select Od, Do, Droga, Dystans, cast(H as char(2)) + ':' + cast(M as char(2)) as Czas
+	from X)
+
+
+  Select top (@Top) * from Y
+	Where Od = @Od and
+	Do = @Do
+	Order by Dystans;
+
+-- egzekwowanie procedury - exec Mapa [Ilość wyświetlanych wyników],[Miasto startowe],[Miasto końcowe]
+exec Mapa 3, Kraków, Białystok
+
+
+	
+	
