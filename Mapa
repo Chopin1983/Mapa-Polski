@@ -1,8 +1,8 @@
 use Portfolio
 
-CREATE TABLE Czas
+CREATE TABLE Time
 (
-Miasto Varchar(30) not null,
+City Varchar(30) not null,
 Białystok time(0) null,
 Bydgoszcz time(0) null,
 Gdańsk time(0) null,
@@ -21,7 +21,7 @@ Warszawa time(0) null,
 Wrocław time(0) null,
 Zielona_Góra time(0) null);
 
-BULK INSERT Czas from 'C:\Users\HP\Desktop\Projekt_tabel\MapaCzas2.csv' With
+BULK INSERT Time from 'C:\Users\HP\Desktop\Projekt_tabel\MapCzas2.csv' With
 (
 Datafiletype = 'Widechar',
 Format = 'CSV',
@@ -29,9 +29,9 @@ Firstrow = 2,
 Fieldterminator = ',',
 Rowterminator = '\n');
 
-CREATE TABLE Odległość
+CREATE TABLE Distance
 (
-Miasto Varchar(30) not null,
+City Varchar(30) not null,
 Białystok smallint null,
 Bydgoszcz smallint null,
 Gdańsk smallint null,
@@ -50,7 +50,7 @@ Warszawa smallint null,
 Wrocław smallint null,
 Zielona_Góra smallint null);
 
-BULK INSERT Odległość from 'C:\Users\HP\Desktop\Projekt_tabel\MapaOdległość2.csv' With
+BULK INSERT Distance from 'C:\Users\HP\Desktop\Projekt_tabel\MapDistance2.csv' With
 (
 Datafiletype = 'Widechar',
 Format = 'CSV',
@@ -58,59 +58,58 @@ Firstrow = 2,
 Fieldterminator = ',',
 Rowterminator = '\n');
 
-CREATE VIEW CzasView as
-Select distinct * from Czas
-Unpivot(Czas for Miejscowość in(Białystok, Bydgoszcz, Gdańsk,Katowice,Kielce,Kraków ,Lublin,Łódź,Olsztyn,Poznań,Radom,Rzeszów,
+CREATE VIEW TimeView as
+Select distinct * from Time
+Unpivot(Time for City_Pivot in(Białystok, Bydgoszcz, Gdańsk,Katowice,Kielce,Kraków,Lublin,Łódź,Olsztyn,Poznań,Radom,Rzeszów,
 Suwałki,Szczecin,Warszawa,Wrocław,Zielona_Góra)) as A
 
-CREATE VIEW OdległośćView as
-Select distinct * from Odległość
-Unpivot(Dystans for Miejscowość in(Białystok,Bydgoszcz,Gdańsk,Katowice,Kielce,Kraków ,Lublin,Łódź,Olsztyn,Poznań,Radom,Rzeszów,
+CREATE VIEW DistanceView as
+Select distinct * from Distance
+Unpivot(Distance_Pivot for City_Pivot in(Białystok,Bydgoszcz,Gdańsk,Katowice,Kielce,Kraków,Lublin,Łódź,Olsztyn,Poznań,Radom,Rzeszów,
 Suwałki,Szczecin,Warszawa,Wrocław,Zielona_Góra)) as B
 
-CREATE Procedure Mapa 
+CREATE Procedure Map 
 @Top int,
 @Od Varchar(30),
 @Do Varchar(30)  as
 
 With A as
-	(Select O.Miasto as Od, O.Dystans, Left(cast(C.Czas as char(2)),2) as Czas_H,
-	substring(cast(C.Czas as varchar(5)),4,2) as Czas_M, C.Miejscowość as Do 
-	from OdległośćView as O join CzasView as C
-	on O.Miejscowość = C.Miejscowość and
-	O.Miasto = C.Miasto),
+	(Select DV.City as From, DV.Distance_Pivot, Left(cast(TV.Time as char(2)),2) as Time_H,
+	substring(cast(TV.Time as varchar(5)),4,2) as Time_M, C.City_Pivot as To 
+	from DistanceView as DV join TimeView as TV
+	on DV.City_Pivot = TV.City_Pivot and
+	DV.City = TV.City),
 
 B as
-	(Select Od, Dystans, cast(Czas_H as int) * 60 + cast(Czas_M as int) as Czas_w_min, Do
+	(Select From, Distance_Pivot, cast(Time_H as int) * 60 + cast(Time_M as int) as Time_Min, To
 	from A),
 
-Ścieżki as
-	(Select Od, Do, cast('-' + Od + '-' + Do + '-' as varchar(max)) as Droga, Dystans,
-	Czas_w_min from B
+Paths as
+	(Select From, To, cast('-' + From + '-' + To + '-' as varchar(max)) as Road, Distance_Pivot,
+	Time_Min from B
   
 Union all
 
-	Select Ś.Od, C.Do, cast(Ś.Droga + C.Do + '-' as Varchar(max)), Ś.Dystans + C.Dystans, Ś.Czas_w_min + C.Czas_w_min from Ścieżki as Ś
+	Select P.From, C.To, cast(P.Road + C.To + '-' as Varchar(max)), P.Distance_Pivot + C.Distance_Pivot, P.Time_Min + C.Time_Min from Paths as P
 	join B as C
-	on Case when Ś.Droga like '%-' + C.Do + '-%' then 1 else 0 End = 0 and Ś.Do = C.Od),
+	on Case when P.Road like '%-' + C.To + '-%' then 1 else 0 End = 0 and P.To = C.From),
 
 X as
-	(Select Od, Do, Droga, Dystans, Right('0' + cast(Czas_w_min/60 as varchar(2)),2) as H, Right('0' + cast(Czas_w_min - (Czas_w_min/60 * 60) as varchar(2)),2) as M from Ścieżki),
+	(Select From, To, Road, Distance_Pivot, Right('0' + cast(Time_Min/60 as varchar(2)),2) as H, Right('0' + cast(Time_Min - (Time_Min/60 * 60) as varchar(2)),2) as M from Paths),
 
 Y as
-	(Select Od, Do, Droga, Dystans, cast(H as char(2)) + ':' + cast(M as char(2)) as Czas
+	(Select From, To, Road, Distance_Pivot, cast(H as char(2)) + ':' + cast(M as char(2)) as Time
 	from X)
 
 
-  Select top (@Top) * from Y
+    Select top (@Top) * from Y
 	Where Od = @Od and
 	Do = @Do
-	Order by Dystans;
+	Order by Distance_Pivot;
 
--- egzekwowanie procedury - exec Mapa [Ilość wyświetlanych wyników],[Miasto startowe],[Miasto końcowe]
-exec Mapa 3, Kraków, Białystok
+-- Executing procedure - exec Map [Number of displayed results],[Starting city],[Final city]
+exec Map 3, Kraków, Białystok
 
 
-	
--- Pliki MapaCzas2 i MapaOdległośći	
+-- Files availeble to download - MapaCzas2 i MapaOdległośći	
 https://www.dropbox.com/scl/fo/pp81fq9dz8bzxjmg83214/AFxGs3uet6VNueHbnqT9b-c?rlkey=nql14kdf8at54f0f6d79mkyes&st=bs07xc6c&dl=0
